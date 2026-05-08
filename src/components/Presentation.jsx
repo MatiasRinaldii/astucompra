@@ -42,7 +42,7 @@ export default function Presentation() {
 
             <div className="quote-card">
               <p>
-                "Cada consejo que doy, ya lo probé con mi propio dinero. No soy un consultor
+                "Cada implementacion que hago, ya la probé en mi propia infraestructura. No soy un consultor
                 que leyó libros — soy un operador que también asesora."
               </p>
             </div>

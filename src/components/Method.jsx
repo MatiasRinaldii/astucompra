@@ -23,7 +23,7 @@ const steps = [
     num: '04',
     icon: <Settings />,
     h: 'Sistematización Operativa',
-    p: 'Implementamos procesos y dashboards para que delegues el 80% de la operación. El negocio escala, vos recuperas tu tiempo.',
+    p: 'Implementamos procesos y dashboards para que delegues el 80% de la operación. El negocio escala, recuperas tu tiempo.',
   },
 ]
 
@@ -37,7 +37,7 @@ export default function Method() {
   return (
     <div className="section-full method-section">
       <div className="section-inner">
-        <div className="eyebrow reveal"><Activity size={14} style={{marginRight: '6px'}}/> El Método Astucompra</div>
+        <div className="eyebrow reveal"><Activity size={14} style={{marginRight: '6px'}}/> El Método AS Digital Partners</div>
         <h2 className="sh reveal method-title">
           Probado en nuestra operación.<br />
           <span className="hero-highlight">Replicado en la tuya.</span>

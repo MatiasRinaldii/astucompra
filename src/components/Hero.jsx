@@ -23,9 +23,7 @@ export default function Hero() {
         </h1>
 
         <p className="hero-sub">
-          Operamos en Argentina, Uruguay y México.<br />
-          Primeros resultados medibles en 30 días, transformación completa en 90.<br />
-          Diagnóstico en 20 minutos. Si en 30 días no detectás mejoras, te devolvemos tu inversión.
+          Si en 30 días no detectás mejoras, te devolvemos tu inversión.
         </p>
 
         <div className="hero-actions">

@@ -2,7 +2,7 @@ const testimonials = [
   {
     q: '"Nico entiende MercadoLibre como nadie. En 3 meses tripliqué mis ventas. La diferencia está en que él vivió cada situación con su propia cuenta."',
     name: 'Dueño',
-    role: 'RedLizard 🇲🇽',
+    role: <>RedLizard <span style={{ fontSize: '1.2rem', marginLeft: '4px', verticalAlign: 'middle' }}>🇲🇽</span></>,
   },
   {
     q: '"Nico y todo su equipo nos ayudaron mucho a controlar el canal, gestionar los precios y escalar nuestro posicionamiento con mucho profesionalismo."',
@@ -12,7 +12,7 @@ const testimonials = [
   {
     q: '"Pasamos de vender de forma reactiva a tener un sistema que funciona solo. Ese fue el cambio real."',
     name: 'Luciano P.',
-    role: 'Importador & distribuidor 🇺🇾',
+    role: <>Importador & distribuidor <span style={{ fontSize: '1.2rem', marginLeft: '4px', verticalAlign: 'middle' }}>🇺🇾</span></>,
   },
 ]
 

@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+
+  #--------------------------------------------------------------------
+  #  TRAEFIK (reverse proxy + Let's Encrypt)
+  #--------------------------------------------------------------------
+  traefik:
+    image: traefik:latest
+    command:
+      - "--api.dashboard=false"
+      - "--providers.swarm=true"
+      - "--providers.swarm.exposedByDefault=false"
+      - "--providers.swarm.network=traefik-public"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.email=nicolas@asdigitalpartners.com"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/matias/letsencrypt:/letsencrypt
+    networks:
+      - traefik-public
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+
+  #--------------------------------------------------------------------
+  #  AS DIGITAL PARTNERS — Landing
+  #--------------------------------------------------------------------
+  asdigital-landing:
+    image: ghcr.io/matiasrinaldii/asdigitalpartners:latest
+    secrets:
+      - GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL
+      - GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+      - GOOGLE_CALENDAR_ID
+      - GOOGLE_AVAILABILITY_CALENDAR_ID
+    networks:
+      - traefik-public
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik-public"
+        # www redirect
+        - "traefik.http.routers.asdigital-www.rule=Host(`www.asdigitalpartners.com`)"
+        - "traefik.http.routers.asdigital-www.entrypoints=websecure"
+        - "traefik.http.routers.asdigital-www.tls.certresolver=myresolver"
+        - "traefik.http.routers.asdigital-www.middlewares=asdigital-redirect"
+        - "traefik.http.middlewares.asdigital-redirect.redirectregex.regex=^https://www\\.(.*)"
+        - "traefik.http.middlewares.asdigital-redirect.redirectregex.replacement=https://$${1}"
+        - "traefik.http.middlewares.asdigital-redirect.redirectregex.permanent=true"
+        # main domain
+        - "traefik.http.routers.asdigital-landing.rule=Host(`asdigitalpartners.com`)"
+        - "traefik.http.routers.asdigital-landing.entrypoints=websecure"
+        - "traefik.http.routers.asdigital-landing.tls.certresolver=myresolver"
+        - "traefik.http.services.asdigital-landing.loadbalancer.server.port=3000"
+        - "traefik.http.routers.asdigital-landing.service=asdigital-landing"
+
+#--------------------------------------------------------------------
+# NETWORKS
+#--------------------------------------------------------------------
+networks:
+  traefik-public:
+    external: true
+
+#--------------------------------------------------------------------
+# SECRETS
+#--------------------------------------------------------------------
+secrets:
+  GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL:
+    external: true
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:
+    external: true
+  GOOGLE_CALENDAR_ID:
+    external: true
+  GOOGLE_AVAILABILITY_CALENDAR_ID:
+    external: true

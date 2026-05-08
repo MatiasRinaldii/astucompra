@@ -14,7 +14,7 @@ export default function Navbar() {
       <div className="nav-left">
         <img src="/logo.jpeg" className="nav-logo" alt="AS Digital Partners" />
         <div className="nav-brand-block">
-          <div className="nav-brand">AS Digital Partners</div>
+          <div className="nav-brand">AS DIGITAL PARTNERS</div>
           <div className="nav-brand-sub">Crecemos tus ventas en MercadoLibre</div>
         </div>
       </div>

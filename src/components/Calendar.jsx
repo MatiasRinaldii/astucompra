@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+'use client'
+import { useState, useCallback, useEffect } from 'react'
 
 /* ── Constants ── */
 const MONTHS = [
@@ -7,12 +8,6 @@ const MONTHS = [
 ]
 const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
-const SLOTS = []
-for (let h = 10; h < 16; h++) {
-  SLOTS.push(`${String(h).padStart(2,'0')}:00`)
-  SLOTS.push(`${String(h).padStart(2,'0')}:30`)
-}
-const INIT_TAKEN = { '2':['10:00','11:30'],'5':['14:00','15:00'],'9':['10:30'],'14':['13:00','14:30'],'16':['11:00'] }
 
 const isWeekend = (d) => d.getDay() === 0 || d.getDay() === 6
 const isPast = (d) => {
@@ -20,25 +15,47 @@ const isPast = (d) => {
   return d < new Date(t.getFullYear(), t.getMonth(), t.getDate())
 }
 
+/* Format a date as YYYY-MM-DD in a given timezone */
+function toLocalDateStr(date, tz) {
+  return date.toLocaleDateString('sv-SE', { timeZone: tz })
+}
+
+/* Get display label for timezone */
+function tzLabel(tz) {
+  const labels = {
+    'America/Argentina/Buenos_Aires': 'Buenos Aires (ART)',
+    'America/Mexico_City': 'CDMX (CST/CDT)',
+    'America/Monterrey': 'Monterrey (CST/CDT)',
+    'America/Bogota': 'Bogotá (COT)',
+    'America/Lima': 'Lima (PET)',
+    'America/Santiago': 'Santiago (CLT)',
+    'America/Montevideo': 'Montevideo (UYT)',
+    'America/New_York': 'New York (ET)',
+    'America/Los_Angeles': 'Los Angeles (PT)',
+    'Europe/Madrid': 'Madrid (CET)',
+  }
+  return labels[tz] ?? tz.replace('_', ' ')
+}
+
 /* ════════ SLOTS POPUP ════════ */
-function SlotsPopup({ date, taken, onSelect, onClose }) {
-  const dayKey = String(date.getDate())
-  const takenSet = new Set(taken[dayKey] || [])
+function SlotsPopup({ date, freeSlots, userTz, onSelect, onClose }) {
+  const dayKey  = String(date.getDate())
+  const daySlots = freeSlots[dayKey] || []
+
   return (
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="slots-box">
         <button className="modal-close" onClick={onClose}>✕</button>
         <div className="slots-date">{date.getDate()} de {MONTHS[date.getMonth()]} {date.getFullYear()}</div>
         <h3 className="slots-title">Elegí un horario</h3>
-        <p className="slots-hint">Zona horaria: Buenos Aires (ART) / CDMX · Lunes a viernes</p>
+        <p className="slots-hint">Tu zona horaria: {tzLabel(userTz)} · Lunes a viernes</p>
         <div className="slots-grid">
-          {SLOTS.map((s) => {
-            const isTaken = takenSet.has(s)
+          {daySlots.length === 0 && <p style={{ fontSize: '0.9rem', color: 'var(--ink-2)' }}>No hay horarios disponibles.</p>}
+          {daySlots.map(({ time, utcStr }) => {
             return (
-              <button key={s} className={`sl-btn ${isTaken ? 'taken' : 'ok'}`} disabled={isTaken}
-                onClick={() => !isTaken && onSelect(s)}>
-                {s}
-                {isTaken && <span className="sl-taken-label">Ocupado</span>}
+              <button key={time} className="sl-btn ok"
+                onClick={() => onSelect(time, time)}>
+                {time}
               </button>
             )
           })}
@@ -49,30 +66,74 @@ function SlotsPopup({ date, taken, onSelect, onClose }) {
 }
 
 /* ════════ FORM MODAL ════════ */
-function FormModal({ date, slot, onConfirm, onClose }) {
+function FormModal({ date, slot, slotLocal, userTz, onConfirm, onClose }) {
   const [form, setForm] = useState({ nombre:'', email:'', tel:'', negocio:'', fact:'', inversion: false })
   const [errors, setErrors] = useState({})
-  const [success, setSuccess] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [apiError, setApiError] = useState('')
+  const [success, setSuccess] = useState(null)
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
-  const submit = () => {
+
+  const submit = async () => {
     const errs = {}
-    if (!form.nombre.trim()) errs.nombre = true
-    if (!form.email.trim())  errs.email  = true
-    if (!form.tel.trim())    errs.tel    = true
-    if (!form.negocio.trim()) errs.negocio = true
-    if (!form.fact) errs.fact = true
+    if (!form.nombre.trim()) errs.nombre = 'El nombre es obligatorio'
+    
+    if (!form.email.trim()) {
+      errs.email = 'El email es obligatorio'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errs.email = 'El email no es válido'
+    }
+    
+    if (!form.tel.trim()) {
+      errs.tel = 'El teléfono es obligatorio'
+    } else if (!/^\+?[\d\s-]{8,}$/.test(form.tel)) {
+      errs.tel = 'El teléfono no es válido'
+    }
+    
+    if (!form.negocio.trim()) errs.negocio = 'El negocio es obligatorio'
+    if (!form.fact) errs.fact = 'Debes seleccionar la facturación'
+    if (!form.inversion) errs.inversion = 'Debes confirmar la capacidad de inversión'
+    
     setErrors(errs)
     if (Object.keys(errs).length) return
-    setSuccess(true)
-    setTimeout(() => { onConfirm(); onClose() }, 2200)
+
+    setLoading(true)
+    setApiError('')
+    try {
+      const dateStr = toLocalDateStr(date, userTz)
+      const res = await fetch('/api/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: form.nombre,
+          email: form.email,
+          tel: form.tel,
+          negocio: form.negocio,
+          fact: form.fact,
+          slot,
+          date: dateStr,
+          tz: userTz,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al reservar')
+      setSuccess(data)
+      setTimeout(() => { onConfirm(); onClose() }, 3000)
+    } catch (err) {
+      setApiError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
+
   return (
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box">
         <button className="modal-close" onClick={onClose}>✕</button>
         {!success ? (
           <>
-            <div className="modal-badge">{date.getDate()} {MONTHS_SHORT[date.getMonth()]} · {slot} hs</div>
+            <div className="modal-badge">{date.getDate()} {MONTHS_SHORT[date.getMonth()]} · {slotLocal} hs</div>
             <h3 className="modal-title">Reservar diagnóstico</h3>
             <p className="modal-sub">Completá tus datos y confirmamos la reunión.</p>
             <div className="mf-row two">
@@ -80,11 +141,13 @@ function FormModal({ date, slot, onConfirm, onClose }) {
                 <label>Nombre completo</label>
                 <input type="text" placeholder="Juan García" value={form.nombre} onChange={set('nombre')}
                   style={errors.nombre ? { borderColor:'#EF4444' } : {}} />
+                {errors.nombre && <span style={{ color:'#EF4444', fontSize:'0.75rem', marginTop:'4px' }}>{errors.nombre}</span>}
               </div>
               <div className="mf-field">
                 <label>Email</label>
                 <input type="email" placeholder="juan@empresa.com" value={form.email} onChange={set('email')}
                   style={errors.email ? { borderColor:'#EF4444' } : {}} />
+                {errors.email && <span style={{ color:'#EF4444', fontSize:'0.75rem', marginTop:'4px' }}>{errors.email}</span>}
               </div>
             </div>
             <div className="mf-row two">
@@ -92,11 +155,13 @@ function FormModal({ date, slot, onConfirm, onClose }) {
                 <label>Teléfono / WhatsApp</label>
                 <input type="tel" placeholder="+54 9 11 ..." value={form.tel} onChange={set('tel')}
                   style={errors.tel ? { borderColor:'#EF4444' } : {}} />
+                {errors.tel && <span style={{ color:'#EF4444', fontSize:'0.75rem', marginTop:'4px' }}>{errors.tel}</span>}
               </div>
               <div className="mf-field">
                 <label>Nombre del negocio</label>
                 <input type="text" placeholder="Mi Empresa SRL" value={form.negocio} onChange={set('negocio')}
                   style={errors.negocio ? { borderColor:'#EF4444' } : {}} />
+                {errors.negocio && <span style={{ color:'#EF4444', fontSize:'0.75rem', marginTop:'4px' }}>{errors.negocio}</span>}
               </div>
             </div>
             <div className="mf-row">
@@ -110,23 +175,34 @@ function FormModal({ date, slot, onConfirm, onClose }) {
                   <option>+500k USD</option>
                   <option>+1M USD</option>
                 </select>
+                {errors.fact && <span style={{ color:'#EF4444', fontSize:'0.75rem', marginTop:'4px' }}>{errors.fact}</span>}
               </div>
             </div>
             <div className="mf-row" style={{ marginTop: '10px', marginBottom: '20px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer', color: 'var(--ink-2)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer', color: errors.inversion ? '#EF4444' : 'var(--ink-2)' }}>
                 <input type="checkbox" checked={form.inversion} onChange={(e) => setForm(f => ({ ...f, inversion: e.target.checked }))} style={{ width: 'auto', margin: 0 }} />
                 Tengo al menos 1500 USD para invertir en escalar mi negocio.
               </label>
             </div>
-            <button className="modal-btn" onClick={submit}>Confirmar diagnóstico →</button>
-            <p className="modal-note">Sin cargo · Respuesta en menos de 24 hs</p>
+            {apiError && <p style={{ color:'#EF4444', fontSize:'.82rem', marginBottom:'12px' }}>{apiError}</p>}
+            <button className="modal-btn" onClick={submit} disabled={loading}>
+              {loading ? 'Reservando...' : 'Confirmar diagnóstico →'}
+            </button>
+            <p className="modal-note">Sin cargo · Link de Google Meet generado automáticamente</p>
           </>
         ) : (
           <div className="modal-success show">
             <div className="ms-ico">✅</div>
             <div className="ms-title">¡Diagnóstico reservado!</div>
-            <p className="ms-sub">{date.getDate()} de {MONTHS[date.getMonth()]} a las {slot} hs</p>
-            <p className="ms-note">Te escribo por WhatsApp/email con el link a la reunión.</p>
+            <p className="ms-sub">{date.getDate()} de {MONTHS[date.getMonth()]} a las {slotLocal} hs ({tzLabel(userTz)})</p>
+            {success.meetLink && (
+              <p className="ms-note">
+                <a href={success.meetLink} target="_blank" rel="noopener noreferrer" style={{ color:'var(--primary)', fontWeight:700 }}>
+                  🎥 Unirse a Google Meet
+                </a>
+              </p>
+            )}
+            <p className="ms-note">Te enviamos los detalles por email.</p>
           </div>
         )}
       </div>
@@ -135,7 +211,7 @@ function FormModal({ date, slot, onConfirm, onClose }) {
 }
 
 /* ════════ CALENDAR GRID ════════ */
-function CalendarGrid({ calDate, selDate, onDayClick }) {
+function CalendarGrid({ calDate, selDate, freeSlots, onDayClick }) {
   const first = new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay()
   const days  = new Date(calDate.getFullYear(), calDate.getMonth() + 1, 0).getDate()
   const today = new Date()
@@ -147,15 +223,20 @@ function CalendarGrid({ calDate, selDate, onDayClick }) {
     const past    = isPast(dt)
     const isToday = dt.toDateString() === today.toDateString()
     const isSel   = selDate && dt.toDateString() === selDate.toDateString()
+    
+    // Check if day has free slots
+    const dayKey = String(dt.getDate())
+    const hasSlots = freeSlots && freeSlots[dayKey] && freeSlots[dayKey].length > 0
+    
     let cls = 'cd'
     if (isSel)           cls = 'cd sel'
-    else if (we || past) cls = 'cd dis'
+    else if (we || past || !hasSlots) cls = 'cd dis'
     else                 cls = 'cd avail'
     if (isToday && !past) cls += ' today'
     cells.push(
-      <div key={n} className={cls} onClick={() => !we && !past && onDayClick(dt)}>
+      <div key={n} className={cls} onClick={() => !we && !past && hasSlots && onDayClick(dt)}>
         <span className="cd-num">{n}</span>
-        {!we && !past && !isSel && <span className="cd-dot" />}
+        {!we && !past && hasSlots && !isSel && <span className="cd-dot" />}
       </div>
     )
   }
@@ -164,22 +245,46 @@ function CalendarGrid({ calDate, selDate, onDayClick }) {
 
 /* ════════ MAIN ════════ */
 export default function Calendar() {
-  const now = new Date()
+  const now     = new Date()
+  const userTz  = Intl.DateTimeFormat().resolvedOptions().timeZone
+
   const [calDate, setCalDate]     = useState(new Date(now.getFullYear(), now.getMonth(), 1))
   const [selDate, setSelDate]     = useState(null)
-  const [selSlot, setSelSlot]     = useState(null)
-  const [taken, setTaken]         = useState(INIT_TAKEN)
+  const [selSlot, setSelSlot]     = useState(null)     // ART slot key
+  const [selSlotLocal, setSelSlotLocal] = useState(null) // display label in user tz
+  const [freeSlots, setFreeSlots] = useState({})
+  const [loadingSlots, setLoadingSlots] = useState(false)
   const [popup, setPopup]         = useState(null)
   const [confirmed, setConfirmed] = useState(false)
+
+  /* Fetch busy slots from API whenever month changes */
+  useEffect(() => {
+    setLoadingSlots(true)
+    const year  = calDate.getFullYear()
+    const month = calDate.getMonth() + 1
+    fetch(`/api/slots?year=${year}&month=${month}&tz=${encodeURIComponent(userTz)}`)
+      .then(r => r.json())
+      .then(data => setFreeSlots(data.freeSlots ?? {}))
+      .catch(() => setFreeSlots({}))
+      .finally(() => setLoadingSlots(false))
+  }, [calDate, userTz])
 
   const prevMonth = () => { setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() - 1, 1)); setSelDate(null) }
   const nextMonth = () => { setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() + 1, 1)); setSelDate(null) }
 
   const handleDayClick = useCallback((dt) => { setSelDate(dt); setPopup('slots') }, [])
-  const handleSlotSelect = (slot) => { setSelSlot(slot); setPopup('form') }
+  const handleSlotSelect = (artSlot, localStr) => {
+    setSelSlot(artSlot)
+    setSelSlotLocal(localStr)
+    setPopup('form')
+  }
   const handleConfirm = () => {
+    // Optimistically remove the selected slot so it isn't available anymore
     const dk = String(selDate.getDate())
-    setTaken((prev) => ({ ...prev, [dk]: [...(prev[dk] || []), selSlot] }))
+    setFreeSlots((prev) => ({
+      ...prev,
+      [dk]: (prev[dk] || []).filter(s => s.time !== selSlot)
+    }))
     setConfirmed(true)
   }
 
@@ -187,10 +292,9 @@ export default function Calendar() {
     <div className="section-blue" id="agenda">
       <div className="section-inner">
 
-        {/* Two-column layout — eyebrow/h2 inside left col so alignment is natural */}
         <div className="cal-wrap reveal">
 
-          {/* ── LEFT col: header + desc + features ── */}
+          {/* ── LEFT col ── */}
           <div className="cal-features-col">
             <div className="eyebrow" style={{ marginBottom: '16px' }}>Agendá tu llamada</div>
             <h2 className="sh" style={{ marginBottom: '14px' }}>
@@ -203,7 +307,7 @@ export default function Calendar() {
               <strong style={{color: 'var(--primary)', fontWeight: 700}}>Cupos limitados:</strong> Tomo solo 3 cuentas nuevas por mes — auditamos antes de aceptar.
             </p>
             {[
-              { ico:'⏱', t:'20 minutos por Google Meet',           s:'Link autogenerado al confirmar' },
+              { ico:'⏱', t:'20 minutos por Google Meet', s:'Link autogenerado al confirmar' },
               { ico:'🔍', t:'Auditoría express en vivo',     s:'Revisamos tus publicaciones y métricas juntos' },
               { ico:'🎯', t:'3 acciones concretas para hoy', s:'Te vas con un plan, no con promesas' },
               { ico:'🤝', t:'Sin compromiso de contratación',s:'100% gratis, sin presión' },
@@ -218,14 +322,16 @@ export default function Calendar() {
             ))}
           </div>
 
-          {/* ── RIGHT col: calendar or confirmed ── */}
+          {/* ── RIGHT col ── */}
           <div className="cal-widget-col">
             {!confirmed ? (
               <div className="cal-widget">
                 <div className="cal-head">
                   <div className="cal-head-left">
                     <div className="cal-mname">{MONTHS[calDate.getMonth()]} {calDate.getFullYear()}</div>
-                    <div className="cal-subtitle">Seleccioná un día disponible</div>
+                    <div className="cal-subtitle">
+                      {loadingSlots ? 'Cargando disponibilidad...' : 'Seleccioná un día disponible'}
+                    </div>
                   </div>
                   <div className="cal-nav">
                     <button className="cal-btn" onClick={prevMonth}>‹</button>
@@ -237,8 +343,8 @@ export default function Calendar() {
                     <span key={d} className={i === 0 || i === 6 ? 'cal-wd-gray' : ''}>{d}</span>
                   ))}
                 </div>
-                <div className="cal-grid">
-                  <CalendarGrid calDate={calDate} selDate={selDate} onDayClick={handleDayClick} />
+                <div className="cal-grid" style={{ opacity: loadingSlots ? 0.5 : 1, transition: 'opacity .3s' }}>
+                  <CalendarGrid calDate={calDate} selDate={selDate} freeSlots={freeSlots} onDayClick={handleDayClick} />
                 </div>
                 <div className="cal-legend">
                   <span className="leg-item"><span className="leg-dot leg-avail" />Disponible</span>
@@ -247,16 +353,15 @@ export default function Calendar() {
                 </div>
               </div>
             ) : (
-              /* Confirmation — same visual weight as the calendar widget */
               <div className="cal-confirmed show">
                 <div className="cc-top">
                   <div className="cc-icon-wrap">🗓️</div>
                   <div className="cc-title">¡Muchas gracias!</div>
                   <p className="cc-msg">
                     Diagnóstico agendado para el {selDate?.getDate()} de{' '}
-                    {MONTHS[selDate?.getMonth()]} a las {selSlot} hs.
+                    {MONTHS[selDate?.getMonth()]} a las {selSlotLocal} hs.
                   </p>
-                  <p className="cc-detail">Recibirás un email con los detalles de la llamada.</p>
+                  <p className="cc-detail">Revisá tu email — el link de Google Meet ya está ahí.</p>
                 </div>
                 <div className="cc-chips">
                   <span className="cc-chip">✓ Confirmado</span>
@@ -271,10 +376,10 @@ export default function Calendar() {
       </div>
 
       {popup === 'slots' && selDate && (
-        <SlotsPopup date={selDate} taken={taken} onSelect={handleSlotSelect} onClose={() => setPopup(null)} />
+        <SlotsPopup date={selDate} freeSlots={freeSlots} userTz={userTz} onSelect={handleSlotSelect} onClose={() => setPopup(null)} />
       )}
       {popup === 'form' && selDate && selSlot && (
-        <FormModal date={selDate} slot={selSlot} onConfirm={handleConfirm} onClose={() => setPopup(null)} />
+        <FormModal date={selDate} slot={selSlot} slotLocal={selSlotLocal} userTz={userTz} onConfirm={handleConfirm} onClose={() => setPopup(null)} />
       )}
     </div>
   )
