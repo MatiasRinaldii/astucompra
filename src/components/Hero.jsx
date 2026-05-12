@@ -34,7 +34,7 @@ export default function Hero() {
           <a href="#presentacion" className="hero-ghost">
             Ver el método
           </a>
-          <div style={{ width: '100%', marginTop: '8px', fontSize: '1.2rem' }}>🇦🇷 🇲🇽 🇺🇾</div>
+          <div style={{ width: '100%', marginTop: '8px', fontSize: '3.6rem', letterSpacing: '8px' }}>🇦🇷 🇲🇽 🇺🇾</div>
         </div>
 
         <div className="hero-trust">

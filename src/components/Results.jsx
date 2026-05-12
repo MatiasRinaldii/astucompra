@@ -2,7 +2,7 @@ const cases = [
   {
     cat: 'Electrónica · México',
     big: '+300%',
-    desc: 'De facturación en 90 días. De 350 mil MX (aprox 20k USD) pasamos a 1M de MX (aprox 62k USD).',
+    desc: 'De facturación en 90 días. Pasamos de 350 mil MXN (≈ USD 20,000) a 1M MXN (≈ USD 62,000).',
     tags: ['MercadoLibre', '90 días', '200+ SKU'],
   },
   {
