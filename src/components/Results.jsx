@@ -21,7 +21,7 @@ const cases = [
 
 export default function Results() {
   return (
-    <div className="section-blue">
+    <div className="section-blue" id="resultados">
       <div className="section-inner">
         <div className="eyebrow reveal">Casos reales</div>
         <h2 className="sh reveal">

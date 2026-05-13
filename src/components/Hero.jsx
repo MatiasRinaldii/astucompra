@@ -31,7 +31,7 @@ export default function Hero() {
             Solicitar diagnóstico sin costo
             <span className="cta-arrow">→</span>
           </a>
-          <a href="#presentacion" className="hero-ghost">
+          <a href="#metodo" className="hero-ghost">
             Ver el método
           </a>
           <div style={{ width: '100%', marginTop: '8px', fontSize: '3.6rem', letterSpacing: '8px' }}>🇦🇷 🇲🇽 🇺🇾</div>

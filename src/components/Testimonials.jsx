@@ -18,7 +18,7 @@ const testimonials = [
 
 export default function Testimonials() {
   return (
-    <div className="section-full">
+    <div className="section-full" id="testimonios">
       <div className="section-inner">
         <div className="eyebrow reveal">Testimonios</div>
         <h2 className="sh reveal">
