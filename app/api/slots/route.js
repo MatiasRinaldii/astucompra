@@ -34,7 +34,7 @@ function getCalendarClient() {
 
 function generateSlotsFromRanges(ranges) {
   const slots = []
-  const SLOT_MINUTES = 30
+  const SLOT_MINUTES = 45
   const slotDurationMs = SLOT_MINUTES * 60 * 1000
 
   for (const range of ranges) {

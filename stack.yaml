@@ -7,6 +7,8 @@ services:
   #--------------------------------------------------------------------
   traefik:
     image: traefik:latest
+    environment:
+      - DOCKER_API_VERSION=1.44
     command:
       - "--api.dashboard=false"
       - "--providers.swarm=true"
@@ -25,7 +27,7 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /home/matias/letsencrypt:/letsencrypt
+      - letsencrypt:/letsencrypt
     networks:
       - traefik-public
     deploy:
@@ -82,6 +84,7 @@ services:
 networks:
   traefik-public:
     external: true
+
 
 #--------------------------------------------------------------------
 # SECRETS
