@@ -51,7 +51,7 @@ function SlotsPopup({ date, freeSlots, userTz, onSelect, onClose }) {
         <p className="slots-hint">Tu zona horaria: {tzLabel(userTz)} · Lunes a viernes</p>
         <div className="slots-grid">
           {daySlots.length === 0 && <p style={{ fontSize: '0.9rem', color: 'var(--ink-2)' }}>No hay horarios disponibles.</p>}
-          {daySlots.map(({ time, utcStr }) => {
+          {daySlots.map(({ time }) => {
             return (
               <button key={time} className="sl-btn ok"
                 onClick={() => onSelect(time, time)}>
@@ -119,6 +119,8 @@ function FormModal({ date, slot, slotLocal, userTz, onConfirm, onClose }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al reservar')
       setSuccess(data)
+      window.dataLayer = window.dataLayer || []
+      window.dataLayer.push({ event: 'booking_confirmed', negocio: form.negocio, facturacion: form.fact })
       setTimeout(() => { onConfirm(); onClose() }, 3000)
     } catch (err) {
       setApiError(err.message)
